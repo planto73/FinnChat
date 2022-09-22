@@ -7,11 +7,24 @@ use std::time::Duration;
 const MSG_SIZE: usize = 64;
 
 fn input() -> String {
-    let mut buff = String::new();
-    stdin()
-        .read_line(&mut buff)
-        .expect("Reading from stdin failed");
-    buff.trim().to_string()
+    loop {
+        let mut buff = String::new();
+        stdin()
+            .read_line(&mut buff)
+            .expect("Reading from stdin failed");
+
+        if buff
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .len()
+            > 0
+        {
+            return buff.trim().to_string();
+        } else {
+            println!("Must provide an input!")
+        }
+    }
 }
 
 fn get_address() -> String {
