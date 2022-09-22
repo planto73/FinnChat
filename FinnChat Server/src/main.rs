@@ -12,20 +12,42 @@ fn sleep() {
 
 fn handle_connection(socket: &mut TcpStream, tx: Sender<(SocketAddr, String)>, addr: SocketAddr) {
     //Assign Name:
-    let mut bname = vec![0; MSG_SIZE];
-    let mut name = String::new();
-    match socket.read(&mut bname) {
-        Ok(_) => {
-            bname = bname
-                .into_iter()
-                .take_while(|&x| x != 0)
-                .collect::<Vec<u8>>();
-            name = String::from_utf8(bname).expect("Invalid utf8 message");
+    let mut name = loop {
+        let mut bname = vec![0; MSG_SIZE];
+        match socket.read(&mut bname) {
+            Ok(_) => {
+                bname = bname
+                    .into_iter()
+                    .take_while(|&x| x != 0)
+                    .collect::<Vec<u8>>();
+                let name = String::from_utf8(bname).expect("Invalid utf8 message");
+                //Send Valid
+                let mut is_valid = false;
+                let valid = if name.len() < 3 {
+                    "\\iThis name is too short!"
+                } else if name.len() > 15 {
+                    "\\iThis name is too long!"
+                } else {
+                    is_valid = true;
+                    "\\v"
+                };
+
+                let mut valid = valid.to_owned().clone().into_bytes();
+                valid.resize(MSG_SIZE, 0);
+                socket
+                    .write_all(&valid)
+                    .expect("Failed to write to socket!");
+                if is_valid {
+                    break name;
+                }
+            }
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+            Err(_) => {
+                println!("Client failed to provide name!")
+            }
         }
-        Err(_) => {
-            println!("Client failed to provide name!")
-        }
-    }
+    };
+
     //Announce Join:
     //Addr is not neccessary but is required for msg
     tx.send((addr, "\\j".to_owned() + &name + " joined!"))

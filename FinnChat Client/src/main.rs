@@ -61,16 +61,44 @@ fn communicate_with_server(client: &mut TcpStream, rx: Receiver<String>) {
 fn main() {
     //Connect to Server
     let address = get_address();
-    println!("What name would you like?");
-    let name = input().into_bytes();
-
     let mut client = TcpStream::connect(address).expect("Stream failed to connect");
     client
         .set_nonblocking(true)
         .expect("Failed to initiate non-blocking");
-    client.write_all(&name).expect("Writing to socket failed");
-
     let (tx, rx) = mpsc::channel::<String>();
+
+    println!("What name would you like?");
+    'outer: loop {
+        //Send Name:
+        let name = input().into_bytes();
+        client.write_all(&name).expect("Writing to socket failed");
+        //Receive Valid:
+        loop {
+            let mut buff = vec![0; MSG_SIZE];
+            match client.read_exact(&mut buff) {
+                Ok(_) => {
+                    let valid = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+                    let valid = String::from_utf8(valid).expect("Invalid utf8 messgae");
+
+                    if &valid[0..2] == "\\v" {
+                        break 'outer;
+                    } else if &valid[0..2] == "\\i" {
+                        println!("{}", &valid[2..]);
+                        break;
+                    } else {
+                        println!("Invalid packet! Aborting Connection!");
+                        return ();
+                    }
+                }
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+                Err(_) => {
+                    println!("Connection with server was severed");
+                    return ();
+                }
+            }
+        }
+    }
+
     thread::spawn(move || communicate_with_server(&mut client, rx));
     //Get Message:
     println!("Write a Message or type quit");
