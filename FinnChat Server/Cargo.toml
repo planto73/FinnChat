@@ -7,3 +7,7 @@ edition = "2021"
 
 [dependencies]
 time = "0.3.14"
+mongodb = "2.3.0"
+bson = "2.4.0"
+futures = "0.3.24"
+tokio = "1.21.1"

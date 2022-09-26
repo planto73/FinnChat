@@ -2,12 +2,18 @@ use std::net::{SocketAddr, TcpListener};
 use std::sync::mpsc;
 use std::thread;
 
-mod handle_con;
+mod com_with_db;
+mod read_from_clients;
 mod write_to_clients;
+
 const PORT: &str = "7777";
 const MSG_SIZE: usize = 64;
 
-fn main() {
+#[tokio::main]
+async fn main() {
+    let messages = com_with_db::get_messages().await;
+    println!("Retrieved past messages from db");
+
     let local = "127.0.0.1:".to_owned() + PORT;
     let server = TcpListener::bind(local).expect("Listener failed to bind");
     server
@@ -26,10 +32,10 @@ fn main() {
             let tx = tx.clone();
             clients.push((addr, socket.try_clone().expect("failed to clone client")));
 
-            thread::spawn(move || handle_con::handle_con(&mut socket, tx, addr));
+            thread::spawn(move || read_from_clients::handle_con(&mut socket, tx, addr));
         }
-        write_to_clients::write(&mut clients, &rx);
+        write_to_clients::write(&mut clients, &rx).await;
 
-        thread::sleep(::std::time::Duration::from_millis(100))
+        thread::sleep(::std::time::Duration::from_millis(10))
     }
 }

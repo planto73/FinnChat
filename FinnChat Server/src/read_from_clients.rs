@@ -3,9 +3,22 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::Sender;
 use std::thread;
 
+fn verify_name(name: &String) -> Vec<u8> {
+    let res = if name.len() < 3 {
+        "\\iThis name is too short!"
+    } else if name.len() > 15 {
+        "\\iThis name is too long!"
+    } else {
+        "\\v"
+    };
+    let mut res = res.to_owned().clone().into_bytes();
+    res.resize(crate::MSG_SIZE, 0);
+    res
+}
+
 pub fn handle_con(socket: &mut TcpStream, tx: Sender<(SocketAddr, String)>, addr: SocketAddr) {
     //Assign Name:
-    let mut name = loop {
+    let name = loop {
         let mut bname = vec![0; crate::MSG_SIZE];
         match socket.read(&mut bname) {
             Ok(_) => {
@@ -15,22 +28,12 @@ pub fn handle_con(socket: &mut TcpStream, tx: Sender<(SocketAddr, String)>, addr
                     .collect::<Vec<u8>>();
                 let name = String::from_utf8(bname).expect("Invalid utf8 message");
                 //Send Valid
-                let mut is_valid = false;
-                let valid = if name.len() < 3 {
-                    "\\iThis name is too short!"
-                } else if name.len() > 15 {
-                    "\\iThis name is too long!"
-                } else {
-                    is_valid = true;
-                    "\\v"
-                };
+                let valid = verify_name(&name);
 
-                let mut valid = valid.to_owned().clone().into_bytes();
-                valid.resize(crate::MSG_SIZE, 0);
                 socket
                     .write_all(&valid)
                     .expect("Failed to write to socket!");
-                if is_valid {
+                if &valid[0..2] == "\\v".to_owned().into_bytes() {
                     break name;
                 }
             }
@@ -40,9 +43,6 @@ pub fn handle_con(socket: &mut TcpStream, tx: Sender<(SocketAddr, String)>, addr
             }
         }
     };
-
-    //Announce Join:
-    //Addr is not neccessary but is required for msg
     tx.send((addr, "\\j".to_owned() + &name + " joined!"))
         .expect("Failed to send name to rx");
 
@@ -56,11 +56,10 @@ pub fn handle_con(socket: &mut TcpStream, tx: Sender<(SocketAddr, String)>, addr
                     .take_while(|&x| x != 0)
                     .collect::<Vec<u8>>();
                 let msg = String::from_utf8(msg).expect("Invalid utf8 message");
+
                 if &msg[0..2] == "\\m" {
                     let res = (addr, "\\m".to_owned() + &name + ": " + &msg[2..]);
                     tx.send(res).expect("Failed to send msg to rx");
-                } else if &msg[0..2] == "\\n" {
-                    name = msg
                 } else {
                     println!("Invalid packet");
                 }
@@ -72,6 +71,6 @@ pub fn handle_con(socket: &mut TcpStream, tx: Sender<(SocketAddr, String)>, addr
             }
         }
 
-        thread::sleep(::std::time::Duration::from_millis(100));
+        thread::sleep(::std::time::Duration::from_millis(10));
     }
 }
