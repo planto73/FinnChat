@@ -71,15 +71,7 @@ fn communicate_with_server(client: &mut TcpStream, rx: Receiver<String>) {
     }
 }
 
-fn main() {
-    //Connect to Server
-    let address = get_address();
-    let mut client = TcpStream::connect(address).expect("Stream failed to connect");
-    client
-        .set_nonblocking(true)
-        .expect("Failed to initiate non-blocking");
-    let (tx, rx) = mpsc::channel::<String>();
-
+fn send_name(client: &mut TcpStream) {
     println!("What name would you like?");
     'outer: loop {
         //Send Name:
@@ -111,6 +103,17 @@ fn main() {
             }
         }
     }
+}
+
+fn main() {
+    //Connect to Server
+    let address = get_address();
+    let mut client = TcpStream::connect(address).expect("Stream failed to connect");
+    client
+        .set_nonblocking(true)
+        .expect("Failed to initiate non-blocking");
+    let (tx, rx) = mpsc::channel::<String>();
+    send_name(&mut client);
 
     thread::spawn(move || communicate_with_server(&mut client, rx));
     //Get Message:
