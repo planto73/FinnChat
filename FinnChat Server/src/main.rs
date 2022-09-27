@@ -8,7 +8,7 @@ mod setup_client;
 mod write_to_clients;
 
 const PORT: &str = "7777";
-const MSG_SIZE: usize = 64;
+const MSG_SIZE: usize = 256;
 
 #[tokio::main]
 async fn main() {

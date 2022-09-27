@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 use std::time::Duration;
 
-const MSG_SIZE: usize = 64;
+const MSG_SIZE: usize = 256;
 
 fn input() -> String {
     loop {
