@@ -45,7 +45,7 @@ fn communicate_with_server(client: &mut TcpStream, rx: Receiver<String>) {
             Ok(_) => {
                 let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
                 let msg = String::from_utf8(msg).expect("Invalid utf8 messgae");
-                println!("{}", &msg[2..]);
+                println!("{}", msg);
             }
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
             Err(_) => {
@@ -85,10 +85,10 @@ fn send_name(client: &mut TcpStream) {
                     let valid = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
                     let valid = String::from_utf8(valid).expect("Invalid utf8 messgae");
 
+                    println!("{}", &valid[2..]);
                     if &valid[0..2] == "\\v" {
                         break 'outer;
                     } else if &valid[0..2] == "\\i" {
-                        println!("{}", &valid[2..]);
                         break;
                     } else {
                         println!("Invalid packet! Aborting Connection!");
@@ -120,7 +120,7 @@ fn main() {
     println!("Write a Message or type quit");
     loop {
         let msg = "\\m".to_owned() + input().trim();
-        if msg == "quit" || tx.send(msg).is_err() {
+        if msg == "\\mquit" || tx.send(msg).is_err() {
             break;
         }
     }

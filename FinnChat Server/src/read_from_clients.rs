@@ -3,7 +3,9 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::Sender;
 use tokio::time::{sleep, Duration};
 
-pub async fn handle_con(
+use crate::com_with_db;
+
+pub async fn read(
     socket: &mut TcpStream,
     tx: Sender<(SocketAddr, String)>,
     addr: SocketAddr,
@@ -21,7 +23,9 @@ pub async fn handle_con(
                 let msg = String::from_utf8(msg).expect("Invalid utf8 message");
 
                 if &msg[0..2] == "\\m" {
-                    let res = (addr, "\\m".to_owned() + &name + ": " + &msg[2..]);
+                    com_with_db::update_db(name.clone(), &msg[2..]).await;
+
+                    let res = (addr, name.clone() + ": " + &msg[2..]);
                     tx.send(res).expect("Failed to send msg to rx");
                 } else {
                     println!("Invalid packet");

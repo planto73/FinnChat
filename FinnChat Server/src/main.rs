@@ -12,9 +12,6 @@ const MSG_SIZE: usize = 64;
 
 #[tokio::main]
 async fn main() {
-    let messages = com_with_db::get_messages().await;
-    println!("Retrieved past messages from db");
-
     let local = "127.0.0.1:".to_owned() + PORT;
     let server = TcpListener::bind(local).expect("Listener failed to bind");
     server
@@ -33,10 +30,8 @@ async fn main() {
             let tx = tx.clone();
             clients.push((addr, socket.try_clone().expect("failed to clone client")));
 
-            let name = setup_client::get_name(&mut socket, &tx, addr);
-            tokio::spawn(async move {
-                read_from_clients::handle_con(&mut socket, tx, addr, name).await
-            });
+            let name = setup_client::setup(&mut socket, &tx, addr).await;
+            tokio::spawn(async move { read_from_clients::read(&mut socket, tx, addr, name).await });
         }
         write_to_clients::write(&mut clients, &rx).await;
         sleep(Duration::from_millis(100)).await;

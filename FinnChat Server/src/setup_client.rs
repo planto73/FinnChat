@@ -1,21 +1,23 @@
+use crate::com_with_db::get_messages;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::Sender;
 
-fn verify_name(name: &String) -> Vec<u8> {
+async fn verify_name(name: &String) -> Vec<u8> {
     let res = if name.len() < 3 {
-        "\\iThis name is too short!"
+        "\\iThis name is too short!".to_owned()
     } else if name.len() > 15 {
-        "\\iThis name is too long!"
+        "\\iThis name is too long!".to_owned()
     } else {
-        "\\v"
+        let messages = get_messages().await;
+        ["\\vWelcome!", &messages].join("\n")
     };
-    let mut res = res.to_owned().clone().into_bytes();
+    let mut res = res.clone().into_bytes();
     res.resize(crate::MSG_SIZE, 0);
     res
 }
 
-pub fn get_name(
+async fn get_name(
     socket: &mut TcpStream,
     tx: &Sender<(SocketAddr, String)>,
     addr: SocketAddr,
@@ -31,8 +33,7 @@ pub fn get_name(
                     .collect::<Vec<u8>>();
                 let name = String::from_utf8(bname).expect("Invalid utf8 message");
                 //Send Valid
-                let valid = verify_name(&name);
-
+                let valid = verify_name(&name).await;
                 socket
                     .write_all(&valid)
                     .expect("Failed to write to socket!");
@@ -46,7 +47,16 @@ pub fn get_name(
             }
         }
     };
-    tx.send((addr, "\\j".to_owned() + &name + " joined!"))
+    tx.send((addr, name.clone() + " joined!"))
         .expect("Failed to send name to rx");
+    name
+}
+
+pub async fn setup(
+    socket: &mut TcpStream,
+    tx: &Sender<(SocketAddr, String)>,
+    addr: SocketAddr,
+) -> String {
+    let name = get_name(socket, &tx, addr).await;
     name
 }

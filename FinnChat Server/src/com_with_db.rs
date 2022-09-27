@@ -11,27 +11,27 @@ async fn get_collection() -> Collection<Document> {
     db.collection::<Document>("msg")
 }
 
-pub async fn get_messages() -> Vec<Vec<u8>> {
+pub async fn get_messages() -> String {
     let collection = get_collection().await;
     collection.find(None, None).await.unwrap();
 
     if let Ok(cursor) = collection.find(None, None).await {
         let list = cursor.try_collect().await.unwrap_or_else(|_| vec![]);
 
-        let mut messages: Vec<Vec<u8>> = Vec::new();
+        let mut messages = String::new();
         for item in list {
             let user = item.get_str("usr").expect("Database corrupted!");
             let msg = item.get_str("msg").expect("Database corrupted!");
-            let res = format!("\\m{}: {}", user, msg).into_bytes();
-            messages.push(res);
+            let res = format!("{}: {}", user, msg);
+            messages += &[&res, "\n"].join("");
         }
         messages
     } else {
-        vec![]
+        String::new()
     }
 }
 
-pub async fn update_db(name: &str, msg: &str) {
+pub async fn update_db(name: String, msg: &str) {
     let collection = get_collection().await;
     let res = doc! {"usr":name, "msg":msg};
     collection
