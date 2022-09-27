@@ -1,8 +1,7 @@
-use std::io::{stdin, ErrorKind, Read, Write};
-use std::net::TcpStream;
-use std::sync::mpsc::{self, Receiver, TryRecvError};
-use std::thread;
-use std::time::Duration;
+use std::error::Error;
+use std::io::{stdin, ErrorKind};
+use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
 
 const MSG_SIZE: usize = 256;
 
@@ -37,50 +36,17 @@ fn get_address() -> String {
     host + ":" + &port
 }
 
-fn communicate_with_server(client: &mut TcpStream, rx: Receiver<String>) {
-    loop {
-        //Listen for message:
-        let mut buff = vec![0; MSG_SIZE];
-        match client.read_exact(&mut buff) {
-            Ok(_) => {
-                let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
-                let msg = String::from_utf8(msg).expect("Invalid utf8 messgae");
-                println!("{}", msg);
-            }
-            Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
-            Err(_) => {
-                println!("Connection with server was severed");
-                break;
-            }
-        }
-        //Send Message:
-        match rx.try_recv() {
-            Ok(msg) => {
-                let mut buff = msg.clone().into_bytes();
-                buff.resize(MSG_SIZE, 0);
-                client.write_all(&buff).expect("Writing to socket failed");
-                println!("You: {}", &msg[2..]);
-            }
-            Err(TryRecvError::Empty) => (),
-            Err(TryRecvError::Disconnected) => {
-                break;
-            }
-        }
-
-        thread::sleep(Duration::from_millis(100));
-    }
-}
-
-fn send_name(client: &mut TcpStream) {
+async fn send_name(client: &mut TcpStream) {
     println!("What name would you like?");
     'outer: loop {
         //Send Name:
         let name = input().into_bytes();
-        client.write_all(&name).expect("Writing to socket failed");
+        client.write_all(&name).await.unwrap();
         //Receive Valid:
         loop {
             let mut buff = vec![0; MSG_SIZE];
-            match client.read_exact(&mut buff) {
+            client.readable().await.unwrap();
+            match client.try_read(&mut buff) {
                 Ok(_) => {
                     let valid = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
                     let valid = String::from_utf8(valid).expect("Invalid utf8 messgae");
@@ -105,23 +71,52 @@ fn send_name(client: &mut TcpStream) {
     }
 }
 
-fn main() {
-    //Connect to Server
-    let address = get_address();
-    let mut client = TcpStream::connect(address).expect("Stream failed to connect");
-    client
-        .set_nonblocking(true)
-        .expect("Failed to initiate non-blocking");
-    let (tx, rx) = mpsc::channel::<String>();
-    send_name(&mut client);
-
-    thread::spawn(move || communicate_with_server(&mut client, rx));
-    //Get Message:
-    println!("Write a Message or type quit");
+async fn read_messages(client: &mut TcpStream) {
     loop {
-        let msg = "\\m".to_owned() + input().trim();
-        if msg == "\\mquit" || tx.send(msg).is_err() {
-            break;
+        //Listen for message:
+        client.readable().await.unwrap();
+        let mut buff = vec![0; MSG_SIZE];
+        match client.try_read(&mut buff) {
+            Ok(_) => {
+                let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+                let msg = String::from_utf8(msg).expect("Invalid utf8 messgae");
+                println!("{}", msg);
+            }
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+            Err(_) => {
+                println!("Connection with server was severed");
+                break;
+            }
         }
     }
+}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    //Connect to Server
+    let address = get_address();
+
+    let std_client = std::net::TcpStream::connect(address)?;
+    std_client.set_nonblocking(true)?;
+    let cloned_std_client = std_client.try_clone()?;
+
+    let mut cloned_client = TcpStream::from_std(cloned_std_client)?;
+    let mut client = TcpStream::from_std(std_client)?;
+
+    send_name(&mut client).await;
+    tokio::spawn(async move { read_messages(&mut cloned_client).await });
+
+    //Send Message:
+    loop {
+        println!("Write a Message or type quit");
+        let msg = "\\m".to_owned() + input().trim();
+        if msg == "\\mquit" {
+            break;
+        } else {
+            let mut buff = msg.clone().into_bytes();
+            buff.resize(MSG_SIZE, 0);
+            client.write_all(&buff).await?;
+            println!("You: {}", &msg[2..]);
+        }
+    }
+    Ok(())
 }
