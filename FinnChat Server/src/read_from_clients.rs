@@ -28,13 +28,18 @@ pub async fn read(
                     let res = (addr, name.clone() + ": " + &msg[2..]);
                     tx.send(res).expect("Failed to send msg to rx");
                 } else {
-                    println!("Invalid packet");
+                    println!("Client {} sent an invalid packet!", addr);
+                    tx.send((addr, name + " left!"))
+                        .expect("Failed to send msg to rx");
+                    return;
                 }
             }
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
             Err(_) => {
-                println!("Client {} stopped responding", addr);
-                break;
+                println!("Client {} stopped responding!", addr);
+                tx.send((addr, name + " left!"))
+                    .expect("Failed to send msg to rx");
+                return;
             }
         }
         sleep(Duration::from_millis(100)).await;
