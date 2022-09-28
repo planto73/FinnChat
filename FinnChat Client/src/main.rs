@@ -90,32 +90,52 @@ async fn read_messages(client: &mut TcpStream) {
         }
     }
 }
+
+fn get_quit() -> bool {
+    println!("Would you like to join a different server(1) or quit(2)?");
+    loop {
+        let quit = input();
+        if quit == "1" {
+            return false;
+        } else if quit == "2" {
+            return true;
+        } else {
+            println!("Please enter either 1 or 2");
+        }
+    }
+}
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    //Connect to Server
-    let address = get_address();
+    'outer: loop {
+        //Connect to Server
+        let address = get_address();
 
-    let std_client = std::net::TcpStream::connect(address)?;
-    std_client.set_nonblocking(true)?;
-    let cloned_std_client = std_client.try_clone()?;
+        let std_client = std::net::TcpStream::connect(address)?;
+        std_client.set_nonblocking(true)?;
+        let cloned_std_client = std_client.try_clone()?;
 
-    let mut cloned_client = TcpStream::from_std(cloned_std_client)?;
-    let mut client = TcpStream::from_std(std_client)?;
+        let mut cloned_client = TcpStream::from_std(cloned_std_client)?;
+        let mut client = TcpStream::from_std(std_client)?;
 
-    send_name(&mut client).await;
-    tokio::spawn(async move { read_messages(&mut cloned_client).await });
+        send_name(&mut client).await;
+        tokio::spawn(async move { read_messages(&mut cloned_client).await });
 
-    //Send Message:
-    loop {
-        println!("Write a Message or type quit");
-        let msg = "\\m".to_owned() + input().trim();
-        if msg == "\\mquit" {
-            break;
-        } else {
-            let mut buff = msg.clone().into_bytes();
-            buff.resize(MSG_SIZE, 0);
-            client.write_all(&buff).await?;
-            println!("You: {}", &msg[2..]);
+        //Send Message:
+        loop {
+            println!("Write a Message or type leave");
+            let msg = "\\m".to_owned() + input().trim();
+            if msg == "\\mleave" {
+                if get_quit() {
+                    break 'outer;
+                } else {
+                    break;
+                }
+            } else {
+                let mut buff = msg.clone().into_bytes();
+                buff.resize(MSG_SIZE, 0);
+                client.write_all(&buff).await?;
+                println!("You: {}", &msg[2..]);
+            }
         }
     }
     Ok(())
