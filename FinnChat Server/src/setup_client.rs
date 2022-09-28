@@ -17,11 +17,11 @@ async fn verify_name(name: &String) -> Vec<u8> {
     res
 }
 
-async fn get_name(
+pub async fn setup(
     socket: &mut TcpStream,
     tx: &Sender<(SocketAddr, String)>,
     addr: SocketAddr,
-) -> Option<String> {
+) -> String {
     //Assign Name:
     let name = loop {
         let mut bname = vec![0; crate::MSG_SIZE];
@@ -44,20 +44,10 @@ async fn get_name(
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
             Err(_) => {
                 println!("Client failed to provide name!");
-                return None;
             }
         }
     };
     tx.send((addr, name.clone() + " joined!"))
         .expect("Failed to send name to rx");
-    Some(name)
-}
-
-pub async fn setup(
-    socket: &mut TcpStream,
-    tx: &Sender<(SocketAddr, String)>,
-    addr: SocketAddr,
-) -> String {
-    let name = get_name(socket, &tx, addr).await.unwrap();
     name
 }
