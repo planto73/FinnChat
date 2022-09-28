@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::io::{stdin, ErrorKind};
 use tokio::io::AsyncWriteExt;
+use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::TcpStream;
 
 const MSG_SIZE: usize = 256;
@@ -71,7 +72,7 @@ async fn send_name(client: &mut TcpStream) {
     }
 }
 
-async fn read_messages(client: &mut TcpStream) {
+async fn read_messages(client: &mut OwnedReadHalf) {
     loop {
         //Listen for message:
         client.readable().await.unwrap();
@@ -109,16 +110,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     'outer: loop {
         //Connect to Server
         let address = get_address();
-
-        let std_client = std::net::TcpStream::connect(address)?;
-        std_client.set_nonblocking(true)?;
-        let cloned_std_client = std_client.try_clone()?;
-
-        let mut cloned_client = TcpStream::from_std(cloned_std_client)?;
-        let mut client = TcpStream::from_std(std_client)?;
+        let mut client = TcpStream::connect(address).await?;
 
         send_name(&mut client).await;
-        tokio::spawn(async move { read_messages(&mut cloned_client).await });
+
+        let (mut client_read, mut client_write) = client.into_split();
+        tokio::spawn(async move { read_messages(&mut client_read).await });
 
         //Send Message:
         loop {
@@ -133,7 +130,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             } else {
                 let mut buff = msg.clone().into_bytes();
                 buff.resize(MSG_SIZE, 0);
-                client.write_all(&buff).await?;
+                client_write.write_all(&buff).await?;
                 println!("You: {}", &msg[2..]);
             }
         }
